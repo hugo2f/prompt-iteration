@@ -1,0 +1,4 @@
+dashscope
+deepdiff
+python-dotenv
+streamlit
