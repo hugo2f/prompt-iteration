@@ -37,7 +37,7 @@ Currently only supports models on Alibaba's Dashscope platform.
    ```
    cp .env.example .env
    ```
-   In `.env`, Copy your dashscope API key under `DASHSCOPE_API_KEY`
+   In `.env`, Copy your dashscope API key under `DASHSCOPE_API_KEY` [(dashscope console)](https://dashscope.console.aliyun.com/overview)
 
 ## Running the app
 To run the project:
