@@ -207,3 +207,77 @@ def json_compare_and_display(text1, text2, col1, col2):
             _RESPONSE_CSS,
             'response-block')
         st.markdown(html_code, unsafe_allow_html=True)
+
+
+def _count_values(json_obj):
+    """count number of deepest values in json_obj"""
+    if isinstance(json_obj, dict):
+        return sum(_count_values(v) for v in json_obj.values())
+    elif isinstance(json_obj, list):
+        return sum(_count_values(item) for item in json_obj)
+    else:
+        return 1
+
+
+def json_accuracy_score(cur, target):
+    """
+    compare two JSON objects and return percentage of correct values matched
+    returns percentage with one decimal digit, ex: 12.3%
+    """
+    # convert JSON strings to dicts
+    cur_dict = json.loads(cur)
+    target_dict = json.loads(target)
+
+    # number of correct values to match
+    target_value_count = _count_values(target_dict)
+
+    # count number of target values not matched
+    diffs = DeepDiff(cur_dict, target_dict, view='tree')
+    added = [diff.path() for diff in diffs.get('dictionary_item_added', [])]
+    changed = ([diff.path() for diff in diffs.get('values_changed', [])]
+               + [diff.path() for diff in diffs.get('type_changes', [])])
+
+    not_matched = 0
+    for diff in added + changed:
+        diff_keys = _diff_to_path(diff)
+        # follow the keys until the second last level, so we can modify key_to_change
+        cur_dict = _follow_path(target_dict, diff_keys)
+        not_matched += _count_values(cur_dict)
+
+    accuracy = 1 - not_matched / target_value_count
+    return f'{accuracy * 100:.1f}%'
+
+
+if __name__ == '__main__':
+    """testing use"""
+
+    json1 = '''
+    {
+      "key1": {
+        "nested_key1": ["value1", "value2"],
+        "nested_key3": "value2"
+      },
+      "key2": {
+        "nested_key3": "value3"
+      },
+      "key3": {
+        "nested_key4": "value4"
+      }
+    }
+    '''
+
+    json2 = '''
+    {
+      "key1": {
+        "nested_key1": "value1",
+        "nested_key2": "value2"
+      },
+      "key2": {
+        "nested_key3": "value3",
+        "nested_key4": "value4"
+      }
+    }
+    '''
+
+    accuracy = json_accuracy_score(json1, json2)
+    print(accuracy)
