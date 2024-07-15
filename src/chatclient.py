@@ -1,23 +1,19 @@
-from enum import Enum
-import json
 import os
 import sys
 import textwrap
-import streamlit as st
 
 import dashscope
 from dashscope import MultiModalConversation
 from dotenv import load_dotenv
 
-import messages
-from utils import character_level_compare_and_display, json_compare_and_display
+from utils import character_level_compare_and_display, json_compare_and_display, json_accuracy_score
+from right_answer import RIGHT_ANSWER
 
-__all__ = ['ChatMode', 'ChatClient']
+__all__ = ['ChatClient']
 
-
-class ChatMode(Enum):
-    TEXT = 'Text'
-    JSON = 'JSON'
+# constants
+_JSON_START = '```json'
+_JSON_END = '```'
 
 
 def _get_project_root() -> str:
@@ -25,10 +21,7 @@ def _get_project_root() -> str:
 
 
 def _get_text(response):
-    """
-    get text from qwen response
-    """
-
+    """get text from qwen response"""
     return response.output.choices[0]['message']['content'][0]['text']
 
 
@@ -42,25 +35,19 @@ def _extract_json(full_response):
     return full_response[start_index + len(_JSON_START):end_index]
 
 
-# constants
-_JSON_START = '```json'
-_JSON_END = '```'
-
-
 class ChatClient:
     """
     handles sending to and receiving from qwen
     """
-    def __init__(self, mode=ChatMode.TEXT, image_name=None, right_answer=None):
-        # chat setup
-        self.mode = mode
 
-        # qwen setup
+    def __init__(self, mode='JSON', image_name=None, right_answer=None):
+        # setup info
+        self.mode = mode
+        load_dotenv()
+        dashscope.api_key = os.getenv('DASHSCOPE_API_KEY')
+
         if image_name:
             images_dir = os.path.join(_get_project_root(), 'images')
-            load_dotenv()
-            dashscope.api_key = os.getenv('DASHSCOPE_API_KEY')
-
             # image to give to qwen
             self.qwen_file_path = f'file://{images_dir}/{image_name}'
 
@@ -70,21 +57,20 @@ class ChatClient:
 
         # response rating
         self.right_answer = right_answer
-        self.accuracy = 0  # percentage accuracy compared to right_answer
-        self.score = 0     # user given score
-
-    def set_mode(self, mode):
-        self.mode = mode
+        # percentage accuracy compared to right_answer (JSON: number of correct keys and values vs. total)
+        self.prev_accuracy = self.cur_accuracy = 0
+        # user given score
+        self.prev_score = self.cur_score = 0
 
     def send_task_message(self, msg):
         """send user's task to model"""
 
         # update saved prompts
         self.prev_prompt = self.cur_prompt
-        self.cur_prompt = textwrap.fill(msg, width=40)
+        self.cur_prompt = textwrap.fill(msg, width=35)
 
         # send message to qwen
-        message = [
+        messages = [
             {
                 'role': 'user',
                 'content': [
@@ -96,45 +82,29 @@ class ChatClient:
 
         response = MultiModalConversation.call(
             model='qwen-vl-plus',
-            messages=message,
-            # stream=False,
-            # incremental_output=True,
+            messages=messages,
         )
 
         response_text = _get_text(response)
 
         if self.mode == 'json':
-            response_json = _extract_json(response_text)
-            response_json = json.dumps(json.loads(response_json), indent=2, ensure_ascii=False)
-        else:
-            response_json = response_text
+            response_text = _extract_json(response_text)
 
-        self.prev_response = self.cur_response
-        self.cur_response = response_json
+        self.prev_response, self.cur_response = self.cur_response, response_text
+        self.prev_accuracy = self.prev_accuracy
+        self.cur_accuracy = json_accuracy_score(self.cur_response, RIGHT_ANSWER)
 
-    def send_analyze_message(self, msg):
+    def send_analyze_message(self, message):
         """send message for analyzing how a prompt can be improved"""
-
-        # todo: analyze_json_response parameters
-        message = [
-            {
-                'role': 'user',
-                'content': [
-                    {'image': self.qwen_file_path},
-                    {'text': messages.format_json_analysis_message()}
-                ]
-            }
-        ]
+        pass
 
     def compare_prompts(self, col1, col2):
         character_level_compare_and_display(self.prev_prompt, self.cur_prompt, col1, col2)
 
     def compare_responses(self, col1, col2):
-        col1.write(self.mode)
-        if self.mode == ChatMode.JSON:
-            st.write('comparing json')
-            json_compare_and_display(_extract_json(self.prev_response), _extract_json(self.cur_response), col1, col2)
-        elif self.mode == ChatMode.TEXT:
+        if _JSON_START in self.prev_response and _JSON_START in self.cur_response:
+            json_compare_and_display(self.prev_response, self.cur_response, col1, col2)
+        else:
             character_level_compare_and_display(self.prev_response, self.cur_response, col1, col2)
 
 
@@ -147,7 +117,7 @@ def main():
         print('Image does not exist')
         sys.exit(-1)
 
-    chat = ChatClient(image_name=image_name, mode=ChatMode.JSON)
+    chat = ChatClient(image_name=image_name)
 
     while True:
         msg = input('> ')
