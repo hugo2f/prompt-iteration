@@ -1,51 +1,21 @@
 import streamlit as st
 
-from chatclient import ChatMode, ChatClient
+from chatclient import ChatClient
+import utils
 
-# initialize states
 # create chat session
-image_name = 'form1.png'
+image_name = 'form2.jpg'
 if 'chat_client' not in st.session_state:
-    st.session_state.chat_client = ChatClient(image_name=image_name, mode=ChatMode.JSON)
-if 'mode' not in st.session_state:
-    st.session_state.mode = ChatMode.TEXT
+    st.session_state.chat_client = ChatClient(image_name)
 chat_client = st.session_state.chat_client
 
 # setup app page
 st.set_page_config(layout="wide")
-
-# title bar + mode list
-_, title_col, mode_col = st.columns([1, 6, 1])
-with title_col:
-    st.markdown("<h1 style='text-align: center; margin-top: -5px; padding-top: 0;'>Prompt Iteration</h1>",
-                unsafe_allow_html=True)
-
-# with mode_col:
-#     selected_mode = st.selectbox("Mode", list(ChatMode), format_func=lambda mode: mode.value, key='mode',
-#                                  on_change=chat_client.set_mode, args=(st.session_state.mode,),
-#                                  label_visibility='collapsed')
+st.markdown("<h1 style='text-align: center;'>Prompt Iteration</h1>", unsafe_allow_html=True)
 
 left, right = st.columns(2)
-left.markdown("""
-    <style>
-    .column-header {
-        padding: 0;
-        margin: 0;
-        text-align: center;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-right.markdown("""
-    <style>
-    .column-header {
-        padding: 0;
-        margin; 0;
-        text-align: center;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-left.markdown("<h3 class='column-header'>Previous</h3>", unsafe_allow_html=True)
-right.markdown("<h3 class='column-header'>Current</h3>", unsafe_allow_html=True)
+left.subheader('Previous', divider='gray')
+right.subheader('Current', divider='gray')
 
 # prompt section
 st.subheader("Prompt")
@@ -66,7 +36,7 @@ prompt = st.chat_input('Enter your prompt')
 
 # this runs every time user presses enter
 if prompt:
-    # chat_client.send_task_message(prompt)
+    chat_client.send_task_message(prompt)
 
     if not chat_client.prev_prompt:  # no need to compare
         with prompt_col2:
@@ -82,3 +52,4 @@ if prompt:
     # placeholder space no longer needed after there are responses
     with space_between_prompt_response:
         st.write("")
+
