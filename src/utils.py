@@ -5,7 +5,7 @@ import json
 from deepdiff import DeepDiff
 import streamlit as st
 
-__all__ = ['character_level_compare_and_display', 'json_compare_and_display']
+__all__ = ['character_level_compare_and_display', 'json_compare_and_display', 'json_accuracy_score']
 
 # -----------------------------------------------------------------------------
 # Private Globals
@@ -29,7 +29,7 @@ _COLOR_CSS = """
 # which doesn't apply the styles properly
 _PROMPT_CSS = f"""
 <style>
-.text-block {{
+.prompt-block {{
     background-color: #444;
     font-family: Helvetica;
     padding: 10px;
@@ -42,7 +42,7 @@ _PROMPT_CSS = f"""
 
 _RESPONSE_CSS = f"""
 <style>
-.text-block {{
+.response-block {{
     background-color: #444;
     font-family: monospace;
     padding: 10px;
@@ -78,7 +78,7 @@ def character_level_compare_and_display(text1, text2, col1, col2):
             elif tag in ('replace', 'delete'):
                 processed_text1.append(f"<span class='red'>{chunk}</span>")
 
-        html_code = _add_html_wrapping(''.join(processed_text1), _PROMPT_CSS, 'text-block')
+        html_code = _add_html_wrapping(''.join(processed_text1), _PROMPT_CSS, 'prompt-block')
         st.markdown(html_code, unsafe_allow_html=True)
 
     with col2:
@@ -90,8 +90,27 @@ def character_level_compare_and_display(text1, text2, col1, col2):
             elif tag in ('replace', 'insert'):
                 processed_text2.append(f"<span class='green'>{chunk}</span>")
 
-        html_code = _add_html_wrapping(''.join(processed_text2), _PROMPT_CSS, 'text-block')
+        html_code = _add_html_wrapping(''.join(processed_text2), _PROMPT_CSS, 'prompt-block')
         st.markdown(html_code, unsafe_allow_html=True)
+
+
+def _diff_to_path(diff):
+    """
+    for example, diff could look like: "root['工单信息'][0]['产品名称']"
+    we want the keys as a list: [工单信息, 0, 产品名称]
+    the .replace("'", "") removes redundant single quotes for string keys
+    """
+    return diff.strip("root[").strip("]").replace("'", "").split("][")
+
+
+def _follow_path(cur_dict, diff_keys):
+    """follow the keys in diff_keys into cur_dict"""
+    for key in diff_keys:
+        # if the json contains lists, the key is an int index
+        if isinstance(cur_dict, list):
+            key = int(key)
+        cur_dict = cur_dict[key]
+    return cur_dict
 
 
 def _highlight_json_diffs(d, diffs, color_class, change_type):
@@ -108,37 +127,26 @@ def _highlight_json_diffs(d, diffs, color_class, change_type):
     original_dict = copy.deepcopy(d)
 
     for diff in diffs:
-        """
-        for example, diff could look like: root['工单信息'][0]['产品名称']
-        we want the keys as a list: [工单信息, 0, 产品名称]
-        the .replace("'", "") removes redundant single quotes for string keys
-        """
-        diff_keys = diff.strip("root[").strip("]").replace("'", "").split("][")
-        current_dict = original_dict
+        diff_keys = _diff_to_path(diff)
         # follow the keys until the second last level, so we can modify key_to_change
         key_to_change = diff_keys.pop()
-
-        for i, key in enumerate(diff_keys):
-            # if the json contains lists, the key is an int index
-            if isinstance(current_dict, list):
-                key = int(key)
-            current_dict = current_dict[key]
+        cur_dict = _follow_path(original_dict, diff_keys)
 
         if change_type == _VALUE_CHANGED:
             # only format the value
-            current_dict[key_to_change] = f"<span class='{color_class}'>{current_dict[key_to_change]}</span>"
+            cur_dict[key_to_change] = f"<span class='{color_class}'>{cur_dict[key_to_change]}</span>"
         elif change_type == _KEY_CHANGED:
             # replace the current <key, value> pair with the formatted version
-            current_dict[f"<span class='{color_class}'>{key_to_change}</span>"] = (
+            cur_dict[f"<span class='{color_class}'>{key_to_change}</span>"] = (
                 f"<span class='{color_class}'>"
-                f"{json.dumps(current_dict[key_to_change], indent=2, ensure_ascii=False)}"
+                f"{json.dumps(cur_dict[key_to_change], indent=2, ensure_ascii=False)}"
                 f"</span>")
-            del current_dict[key_to_change]
+            del cur_dict[key_to_change]
 
     return original_dict
 
 
-def _decode_json_string(json_string):
+def _load_json_string(json_string):
     """
     convert a string with a JSON into a dict
     returns None if string is not a valid JSON
@@ -152,7 +160,6 @@ def _decode_json_string(json_string):
 
 
 def json_compare_and_display(text1, text2, col1, col2):
-
     """
     compare texts and display to streamlit columns
     :param text1, text2: JSON strings to compare
@@ -160,8 +167,8 @@ def json_compare_and_display(text1, text2, col1, col2):
     """
 
     # compare the json strings as json
-    dict1 = _decode_json_string(text1)
-    dict2 = _decode_json_string(text2)
+    dict1 = _load_json_string(text1)
+    dict2 = _load_json_string(text2)
 
     if dict1 is None or dict2 is None:
         st.warning('At least one of the responses are not JSONs')
@@ -171,13 +178,13 @@ def json_compare_and_display(text1, text2, col1, col2):
             st.write(text2)
         return
 
-    differences = DeepDiff(dict1, dict2, view='tree')
+    diffs = DeepDiff(dict1, dict2, view='tree')
 
     # get paths to differences of each type
-    added = [diff.path() for diff in differences.get('dictionary_item_added', [])]
-    removed = [diff.path() for diff in differences.get('dictionary_item_removed', [])]
-    changed = ([diff.path() for diff in differences.get('values_changed', [])]
-               + [diff.path() for diff in differences.get('type_changes', [])])
+    added = [diff.path() for diff in diffs.get('dictionary_item_added', [])]
+    removed = [diff.path() for diff in diffs.get('dictionary_item_removed', [])]
+    changed = ([diff.path() for diff in diffs.get('values_changed', [])]
+               + [diff.path() for diff in diffs.get('type_changes', [])])
 
     # highlight differing parts
     dict1_formatted = _highlight_json_diffs(dict1, removed, 'red', _KEY_CHANGED)
@@ -190,7 +197,7 @@ def json_compare_and_display(text1, text2, col1, col2):
         html_code = _add_html_wrapping(
             json.dumps(dict1_formatted, indent=2, ensure_ascii=False),
             _RESPONSE_CSS,
-            'text-block')
+            'response-block')
 
         st.markdown(html_code, unsafe_allow_html=True)
 
@@ -198,5 +205,5 @@ def json_compare_and_display(text1, text2, col1, col2):
         html_code = _add_html_wrapping(
             json.dumps(dict2_formatted, indent=2, ensure_ascii=False),
             _RESPONSE_CSS,
-            'text-block')
+            'response-block')
         st.markdown(html_code, unsafe_allow_html=True)
