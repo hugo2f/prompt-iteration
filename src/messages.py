@@ -25,7 +25,7 @@ def _format_diffs(diffs):
     return f'{missing_prompt}\n{wrong_prompt}'
 
 
-def json_analysis_prompt(prompt, accuracy, diffs, response, response_is_json, is_first_prompt):
+def json_analysis_prompt(prompt, accuracy, diffs, response, is_first_prompt):
     """
     formats a prompt to analyze current response vs. right answer
 
@@ -33,20 +33,22 @@ def json_analysis_prompt(prompt, accuracy, diffs, response, response_is_json, is
     :param accuracy: percentage accuracy, e.g. 25.2
     :param diffs: DeepDiff diffs
     :param response: model response, dict if contains valid json, else string
-    :param response_is_json: True if response contains valid json, False otherwise
     :param is_first_prompt: True if analyzing first prompt, False if analyzing new prompt versions
     """
     if is_first_prompt:
         prompt_start = ""
     else:
         prompt_start = "我对上一版prompt做了修改。"
-    if response_is_json:
+
+    if isinstance(response, dict):
         response = json.dumps(response, indent=2, ensure_ascii=False)
         analysis = (f"你正确解析了{accuracy}%的JSON键值对，具体错误如下。\n"
                     f"{_format_diffs(diffs)}\n")
     else:
         if isinstance(response, list):
             analysis = "合理的JSON格式是由{}围绕，但你的返回用了[]。"
+        elif '//' in response:
+            analysis = "JSON输出里有多余的注释。"
         else:
             analysis = "你的输出不是JSON格式。"
 
