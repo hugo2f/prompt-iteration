@@ -67,17 +67,17 @@ if prompt:
         chat_client.compare_display_responses(response_col1, response_col2,
                                               json_warning1, json_warning2)
 
-        # accuracy
-        with response_col1:
-            if chat_client.prev_accuracy == -1:
-                json_warning1.warning('This response does not contain a valid JSON')
-            else:
-                st.write(chat_client.prev_accuracy)
-        with response_col2:
-            if chat_client.cur_accuracy == -1:
-                json_warning2.warning('This response does not contain a valid JSON')
-            else:
-                st.write(chat_client.cur_accuracy)
+    if chat_client.prev_accuracy and chat_client.prev_accuracy == -1:
+        json_warning1.warning('This response does not contain a valid JSON')
+    if chat_client.cur_accuracy and chat_client.cur_accuracy == -1:
+        json_warning2.warning('This response does not contain a valid JSON')
+    # accuracy
+    with response_col1:
+        st.write(f'Accuracy: {max(chat_client.prev_accuracy, 0)}%')
+    with response_col2:
+        st.write('fdsa')
+        st.write(f'Accuracy: {max(chat_client.cur_accuracy, 0)}%')
+        st.write('asdf')
 
     if chat_client.cur_accuracy < 100:
         analysis.write(chat_client.send_analyze_message(st.session_state.is_first_prompt))
