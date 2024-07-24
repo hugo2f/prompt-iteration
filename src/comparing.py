@@ -35,11 +35,14 @@ def load_json_string(json_string):
 
 def get_json_diffs(cur_dict, target_dict):
     """
-    :param cur_dict: cur_response (converted to dict already)
+    :param cur_dict: cur_response (if valid JSON, converted to dict already)
     :param target_dict: right answer
     :return:
-        DeepDiff diffs with view='tree'
+        None if cur_dict is not a dict,
+        DeepDiff diffs with view='tree' otherwise
     """
+    if not isinstance(cur_dict, dict):
+        return None
     return DeepDiff(cur_dict, target_dict, view='tree')
 
 
@@ -207,10 +210,14 @@ def json_accuracy_score(cur, target_dict):
     """
 
     # convert JSON string to dict
-    try:
-        cur_dict = json.loads(cur)
-    except (JSONDecodeError, TypeError):
-        return -1
+    if isinstance(cur, dict):
+        cur_dict = cur
+    else:
+        try:
+            cur_dict = json.loads(cur)
+        except (JSONDecodeError, TypeError):
+            print('not a json: ', cur)
+            return -1
 
     # number of correct values to match
     target_value_count = _count_values(target_dict)
