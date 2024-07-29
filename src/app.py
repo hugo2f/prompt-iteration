@@ -75,9 +75,7 @@ if prompt:
     with response_col1:
         st.write(f'Accuracy: {max(chat_client.prev_accuracy, 0)}%')
     with response_col2:
-        st.write('fdsa')
         st.write(f'Accuracy: {max(chat_client.cur_accuracy, 0)}%')
-        st.write('asdf')
 
     if chat_client.cur_accuracy < 100:
         analysis.write(chat_client.send_analyze_message(st.session_state.is_first_prompt))
