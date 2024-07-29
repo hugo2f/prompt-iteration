@@ -1,7 +1,6 @@
 from http import HTTPStatus
 import os
 import sys
-import textwrap
 
 import dashscope
 from dashscope import MultiModalConversation
@@ -18,8 +17,6 @@ __all__ = ['ChatClient']
 # -----------------------------------------------------------------------------
 # private globals
 # -----------------------------------------------------------------------------
-_JSON_START = '```'
-_JSON_END = '```'
 _QWEN_MODEL = 'qwen-vl-max'
 
 
@@ -28,26 +25,41 @@ def _get_project_root() -> str:
 
 
 def _get_text(response):
-    """get text from qwen response"""
+    """Get text from qwen response"""
     return response.output.choices[0]['message']['content'][0]['text']
 
 
 def _extract_json(full_response):
     """
-    if exists, the json will start with ```json or ```, and end with ```,
+    If exists, the json will start with ```json or ```, and end with ```,
     returns '' if nonexistent
     """
-    start_index = full_response.find(_JSON_START)
-    if full_response[start_index:start_index + 4].lower() == 'json':
-        start_index += 4
-    end_index = full_response.find(_JSON_END, start_index + len(_JSON_START))
-    return full_response[start_index + len(_JSON_START):end_index]
+    _JSON_BLOCK_START = '```JSON'
+    _CODE_BLOCK_START = '```'
+    _CODE_BLOCK_END = '```'
+
+    # look for JSON block
+    json_start = full_response.find(_JSON_BLOCK_START)
+    if json_start != -1:
+        content_start = json_start + len(_JSON_BLOCK_START)
+        end = full_response.find(_CODE_BLOCK_END, content_start)
+        if end != -1:
+            return full_response[content_start:end].strip()
+
+    # if ```json not present, check if there's a code block with just ```
+    code_start = full_response.find(_CODE_BLOCK_START)
+    if code_start != -1:
+        content_start = code_start + len(_CODE_BLOCK_START)
+        end = full_response.find(_CODE_BLOCK_END, content_start)
+        if end != -1:
+            return full_response[content_start:end].strip()
+
+    # no JSON/code found
+    return ''
 
 
 class ChatClient:
-    """
-    handles sending to and receiving from qwen
-    """
+    """handles sending to and receiving from qwen"""
 
     def __init__(self, mode='JSON', image_name=None):
         # setup info
@@ -64,6 +76,7 @@ class ChatClient:
             self.qwen_file_path = f'file://{images_dir}/{image_name}'
 
         # 2 most recent pairs of prompts/responses to compare
+        # stores dicts in JSON mode (if response contains a valid JSON)
         self.prev_prompt = self.prev_response = None
         self.cur_prompt = self.cur_response = None
 
@@ -99,9 +112,9 @@ class ChatClient:
                                       {"text": msg}
                                   ]})
 
-        # # for testing: display chat history
-        # import streamlit as st
-        # st.write(len(self.messages), self.messages)
+        # for testing: display chat history
+        import streamlit as st
+        st.write(len(self.messages), self.messages)
         response = MultiModalConversation.call(
             model=_QWEN_MODEL,
             messages=self.messages,
@@ -129,11 +142,11 @@ class ChatClient:
         processed_response = self._send_message(msg, is_first_prompt)
 
         if self.mode == 'JSON':
-            response_json = load_json_string(_extract_json(processed_response))
-            # only if processed_response contains a valid JSON, store the JSON in cur_response
-            # otherwise, store original text
-            if response_json is not None:
-                processed_response = response_json
+            print('processed response: ', _extract_json(processed_response))
+            print('loaded json: ', load_json_string(_extract_json(processed_response)))
+            loaded_json = load_json_string(_extract_json(processed_response))
+            if loaded_json:
+                processed_response = loaded_json
 
         self.prev_response, self.cur_response = self.cur_response, processed_response
         self.prev_accuracy = self.prev_accuracy
@@ -145,14 +158,10 @@ class ChatClient:
 
         :return response text
         """
-        # cur_response doesn't contain valid json -> json_accuracy_score returns -1
-        if self.cur_accuracy == -1:
-            msg = json_analysis_prompt(self.cur_prompt, self.cur_accuracy, None,
-                                       self.cur_response, False, is_first_prompt)
-        else:
-            diffs = get_json_diffs(self.cur_response, self.right_answer)
-            msg = json_analysis_prompt(self.cur_prompt, self.cur_accuracy, diffs,
-                                       self.cur_response, True, is_first_prompt)
+
+        diffs = get_json_diffs(self.cur_response, self.right_answer)
+        msg = json_analysis_prompt(self.cur_prompt, self.cur_accuracy, diffs,
+                                   self.cur_response, is_first_prompt)
 
         processed_response = self._send_message(msg, False)
         return processed_response
