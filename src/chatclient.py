@@ -34,7 +34,7 @@ def _extract_json(full_response):
     If exists, the json will start with ```json or ```, and end with ```,
     returns '' if nonexistent
     """
-    _JSON_BLOCK_START = '```JSON'
+    _JSON_BLOCK_START = '```json'
     _CODE_BLOCK_START = '```'
     _CODE_BLOCK_END = '```'
 
@@ -42,20 +42,16 @@ def _extract_json(full_response):
     json_start = full_response.find(_JSON_BLOCK_START)
     if json_start != -1:
         content_start = json_start + len(_JSON_BLOCK_START)
-        end = full_response.find(_CODE_BLOCK_END, content_start)
-        if end != -1:
-            return full_response[content_start:end].strip()
-
-    # if ```json not present, check if there's a code block with just ```
-    code_start = full_response.find(_CODE_BLOCK_START)
-    if code_start != -1:
+    else:
+        code_start = full_response.find(_CODE_BLOCK_START)
         content_start = code_start + len(_CODE_BLOCK_START)
-        end = full_response.find(_CODE_BLOCK_END, content_start)
-        if end != -1:
-            return full_response[content_start:end].strip()
+    if content_start == -1:
+        return ''
 
-    # no JSON/code found
-    return ''
+    end = full_response.find(_CODE_BLOCK_END, content_start)
+    if end == -1:
+        return ''
+    return full_response[content_start:end].strip()
 
 
 class ChatClient:
@@ -109,7 +105,8 @@ class ChatClient:
         else:
             self.messages.append({"role": "user",
                                   "content": [
-                                      {"text": msg}
+                                      {"text": msg},
+                                      {'image': self.qwen_file_path}
                                   ]})
 
         # for testing: display chat history

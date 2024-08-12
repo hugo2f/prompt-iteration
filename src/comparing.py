@@ -135,25 +135,27 @@ def _highlight_json_diffs(d, diffs, color_class, change_type):
     return original_dict
 
 
-def json_compare_and_display(text1, text2, col1, col2, warn1, warn2):
+def json_compare_and_display(dict1, dict2, col1, col2, warn1, warn2):
     """
     compare texts and display to streamlit columns
-    :param text1, text2: JSON strings to compare
+    :param dict1, dict2: JSONs to compare
     :param col1, col2: target streamlit columns
     :param warn1, warn2: empty() elements for displaying warning
     """
-    # compare the json strings as json
-    dict1 = load_json_string(text1)
-    dict2 = load_json_string(text2)
+    # just in case dict1/2 are passed in as strings, convert them if needed
+    if not isinstance(dict1, dict):
+        dict1 = load_json_string(dict1)
+    if not isinstance(dict2, dict):
+        dict2 = load_json_string(dict2)
 
     if dict1 is None or dict2 is None:
         if dict1 is None:
             with col1:
-                st.write(text1)
+                st.write(dict1)
                 warn1.warning('Previous response does not contain a valid JSON')
         if dict2 is None:
             with col2:
-                st.write(text2)
+                st.write(dict2)
                 warn2.warning('Current response does not contain a valid JSON')
         return
 
@@ -221,6 +223,7 @@ def json_accuracy_score(cur, target_dict):
 
     # number of correct values to match
     target_value_count = _count_values(target_dict)
+    print(target_value_count)
 
     # count number of target values not matched
     diffs = DeepDiff(cur_dict, target_dict, view='tree')
