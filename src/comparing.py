@@ -223,7 +223,6 @@ def json_accuracy_score(cur, target_dict):
 
     # number of correct values to match
     target_value_count = _count_values(target_dict)
-    print(target_value_count)
 
     # count number of target values not matched
     diffs = DeepDiff(cur_dict, target_dict, view='tree')
@@ -244,7 +243,7 @@ def json_accuracy_score(cur, target_dict):
 
 def main():
     """testing use"""
-    json1 = '''
+    json1 = json.loads('''
         {
           "key1": {
             "nested_key1": ["value1", "value2"],
@@ -257,9 +256,9 @@ def main():
             "nested_key4": "value4"
           }
         }
-        '''
+    ''')
 
-    json2 = '''
+    json2 = json.loads('''
         {
           "key1": {
             "nested_key1": "value1",
@@ -270,10 +269,15 @@ def main():
             "nested_key4": "value4"
           }
         }
-        '''
+    ''')
 
     acc = json_accuracy_score(json1, json2)
-    diffs = DeepDiff(json.loads(json1), json.loads(json2), view='tree')
+    print(json1)
+    print('-----------')
+    print(json2)
+    print('-----------')
+    print(acc)
+    diffs = DeepDiff(json1, json2, view='tree')
     added = [diff.path() for diff in diffs.get('dictionary_item_added', [])]
     changed = ([diff.path() for diff in diffs.get('values_changed', [])]
                + [diff.path() for diff in diffs.get('type_changes', [])])
